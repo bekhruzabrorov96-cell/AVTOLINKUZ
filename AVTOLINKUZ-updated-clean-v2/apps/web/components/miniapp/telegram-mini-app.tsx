@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { BatteryCharging, Bot, CarFront, ChevronRight, Gauge, Heart, Home, Loader2, LockKeyhole, MapPin, Navigation, PlusCircle, Search, User, X, Zap } from "lucide-react";
+import { BatteryCharging, Bot, CheckCircle2, ChevronRight, ExternalLink, Gauge, Heart, Home, KeyRound, Loader2, LockKeyhole, MapPin, MapPinned, Phone, PlusCircle, Save, Search, User, X, Zap } from "lucide-react";
 import type { AiSearchResult, ListingFilters, ListingPrivate, ListingPublic } from "@avtolink/shared";
-import { aiSearch, aiSuggestions } from "@/lib/api";
+import { aiSearch, aiSuggestions, createSellerListing, getPrivateListing, requestPhoneOtp, updateListingStatus, verifyPhoneOtp, type BuyerSession } from "@/lib/api";
+import { BrandMark } from "@/components/brand-mark";
 
 type Tab = "home" | "search" | "sell" | "profile";
 type TelegramUser = {
@@ -32,6 +33,34 @@ type TelegramWebApp = {
   showPopup?: (params: { title?: string; message: string; buttons?: Array<{ id?: string; type?: string; text: string }> }) => void;
 };
 
+type SellerDraft = {
+  make: string;
+  model: string;
+  year: string;
+  powertrainType: "EV" | "REEV" | "PHEV" | "HYBRID";
+  trim: string;
+  batteryKwh: string;
+  rangeKm: string;
+  rangeStandard: "CLTC" | "WLTP" | "EPA" | "UNKNOWN";
+  motorPowerKw: string;
+  driveType: "FWD" | "RWD" | "AWD" | "UNKNOWN";
+  condition: string;
+  batteryHealthPercent: string;
+  customsStatus: string;
+  bodyColor: string;
+  priceUsd: string;
+  mileageKm: string;
+  region: string;
+  exactLocation: string;
+  latitude: string;
+  longitude: string;
+  yandexMapUrl: string;
+  sellerPhone: string;
+  sellerTelegramUsername: string;
+  description: string;
+  photoUrls: string;
+};
+
 declare global {
   interface Window {
     Telegram?: {
@@ -41,10 +70,12 @@ declare global {
 }
 
 export function TelegramMiniApp({ listings }: { listings: ListingPrivate[] }) {
+  const [appListings, setAppListings] = useState<ListingPrivate[]>(listings);
   const [tab, setTab] = useState<Tab>("home");
   const [query, setQuery] = useState("20 ming dollargacha BYD EV");
   const [selectedMake, setSelectedMake] = useState("Barchasi");
   const [selectedListing, setSelectedListing] = useState<ListingPublic | null>(null);
+  const [buyerSession, setBuyerSession] = useState<BuyerSession | null>(null);
   const telegram = useTelegramMiniApp();
 
   return (
@@ -52,30 +83,43 @@ export function TelegramMiniApp({ listings }: { listings: ListingPrivate[] }) {
       <header className="sticky top-0 z-20 border-b border-line bg-white/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand text-white"><CarFront className="h-5 w-5" /></span>
+            <BrandMark className="h-10 w-10 shrink-0 drop-shadow-sm" />
             <div>
               <h1 className="text-base font-black">Avtolink.uz</h1>
-              <p className="text-xs font-medium text-slate-500">{telegram.isTelegram ? "Telegram ichida" : "Demo rejim"}</p>
+              <p className="text-xs font-medium text-slate-500">{telegram.isTelegram ? "Telegram ichida" : "Sinov rejimi"}</p>
             </div>
           </div>
-          <button className="rounded-md bg-brand/10 px-3 py-2 text-xs font-black text-brand">{telegram.user?.first_name ?? "UZ"}</button>
+          <button className="rounded-md bg-brand/10 px-3 py-2 text-xs font-black text-brand">{buyerSession ? "Xaridor" : telegram.user?.first_name ?? "Mehmon"}</button>
         </div>
       </header>
 
       <main className="px-4 pb-24 pt-4">
-        {tab === "home" ? <HomeScreen listings={listings} setTab={setTab} onContactClick={setSelectedListing} /> : null}
+        {tab === "home" ? <HomeScreen listings={appListings.filter((listing) => listing.status === "ACTIVE")} setTab={setTab} onContactClick={setSelectedListing} /> : null}
         {tab === "search" ? (
           <SearchScreen
             query={query}
             setQuery={setQuery}
             selectedMake={selectedMake}
             setSelectedMake={setSelectedMake}
-            fallbackListings={listings}
+            fallbackListings={appListings.filter((listing) => listing.status === "ACTIVE")}
             onContactClick={setSelectedListing}
           />
         ) : null}
-        {tab === "sell" ? <SellerScreen /> : null}
-        {tab === "profile" ? <ProfileScreen listings={listings} /> : null}
+        {tab === "sell" ? (
+          <SellerScreen
+            telegramUser={telegram.user}
+            onCreated={(listing) => {
+              setAppListings((current) => [listing, ...current]);
+              setTab("profile");
+            }}
+          />
+        ) : null}
+        {tab === "profile" ? (
+          <ProfileScreen
+            listings={appListings}
+            onStatusChange={(id, status) => setAppListings((current) => current.map((listing) => listing.id === id ? { ...listing, status } : listing))}
+          />
+        ) : null}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-line bg-white/95 px-2 py-2 backdrop-blur">
@@ -87,7 +131,16 @@ export function TelegramMiniApp({ listings }: { listings: ListingPrivate[] }) {
         </div>
       </nav>
 
-      {selectedListing ? <LockedContactSheet listing={selectedListing} telegram={telegram.webApp} onClose={() => setSelectedListing(null)} onLogin={() => setTab("profile")} /> : null}
+      {selectedListing ? (
+        <LockedContactSheet
+          listing={selectedListing}
+          telegram={telegram.webApp}
+          buyerSession={buyerSession}
+          localPrivateListing={appListings.find((item) => item.id === selectedListing.id)}
+          onSession={setBuyerSession}
+          onClose={() => setSelectedListing(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -143,7 +196,7 @@ function HomeScreen({ listings, setTab, onContactClick }: { listings: ListingPri
       <section className="grid grid-cols-3 gap-2">
         <MiniStat value={String(listings.length)} label="e'lon" />
         <MiniStat value="4" label="EV turi" />
-        <MiniStat value="1 tap" label="login" />
+        <MiniStat value="1 bosish" label="kirish" />
       </section>
 
       <section className="grid gap-3">
@@ -173,6 +226,14 @@ function SearchScreen({
   onContactClick: (listing: ListingPublic) => void;
 }) {
   const makes = ["Barchasi", "BYD", "Li Auto", "Zeekr", "Nio"];
+  const quickPrompts = [
+    "20 ming dollargacha",
+    "Oilaviy REEV",
+    "Toshkentda probegi kam",
+    "500 km dan yuqori",
+    "Yangi BYD",
+    "Batareya 90%+"
+  ];
   const [results, setResults] = useState<AiSearchResult[]>([]);
   const [parsedFilters, setParsedFilters] = useState<ListingFilters>({});
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -219,6 +280,14 @@ function SearchScreen({
     void searchWithQuery(nextQuery);
   }
 
+  function applyQuickPrompt(prompt: string) {
+    const nextQuery = query.trim()
+      ? `${query}, ${prompt}`
+      : prompt;
+    setQuery(nextQuery);
+    void searchWithQuery(nextQuery);
+  }
+
   const displayedResults = useMemo(() => {
     const source = results.length
       ? results
@@ -242,11 +311,29 @@ function SearchScreen({
   return (
     <div className="grid gap-4">
       <section className="rounded-xl bg-white p-4 shadow-sm">
-        <p className="text-xs font-black uppercase text-brand">AI qidiruv</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase text-brand">AI qidiruv</p>
+            <h2 className="mt-1 text-xl font-black leading-tight">Qanday EV kerak?</h2>
+            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Byudjet, probeg, hudud yoki foydalanish maqsadini yozing.</p>
+          </div>
+          <span className="rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-black text-brand">Mehmon</span>
+        </div>
         <label className="mt-3 flex h-12 items-center gap-2 rounded-lg border border-line bg-slate-50 px-3">
           <Search className="h-5 w-5 text-slate-400" />
           <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" placeholder="20 minggacha BYD EV" />
         </label>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {quickPrompts.map((prompt) => (
+            <button
+              key={prompt}
+              onClick={() => applyQuickPrompt(prompt)}
+              className="min-h-10 rounded-md bg-slate-100 px-2 py-2 text-left text-xs font-black leading-4 text-slate-700"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           {makes.map((make) => (
             <button key={make} onClick={() => setSelectedMake(make)} className={`whitespace-nowrap rounded-md px-3 py-2 text-xs font-black ${selectedMake === make ? "bg-brand text-white" : "bg-slate-100 text-slate-700"}`}>
@@ -256,7 +343,7 @@ function SearchScreen({
         </div>
         <button onClick={runSearch} disabled={loading} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-brand text-sm font-black text-white disabled:opacity-70">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-          AI bilan topish
+          {loading ? "AI mos e'lonlarni tekshiryapti..." : "AI bilan topish"}
         </button>
       </section>
 
@@ -315,7 +402,7 @@ function AiIntentPanel({ parsed, suggestions, onSuggestionClick }: { parsed: Lis
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-sm leading-6 text-slate-600">Hali aniq talab topilmadi. Byudjet, marka, probeg yoki range yozing.</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">Hali aniq talab topilmadi. Byudjet, marka, probeg yoki yurish zaxirasini yozing.</p>
       )}
       {suggestions.length ? (
         <div className="mt-3">
@@ -367,88 +454,293 @@ function intentChips(parsed: ListingFilters) {
   if (parsed.region) chips.push(`Hudud: ${parsed.region}`);
   if (parsed.maxPrice) chips.push(`Byudjet: $${parsed.maxPrice.toLocaleString("en-US")} gacha`);
   if (parsed.maxMileageKm) chips.push(`Probeg: ${parsed.maxMileageKm.toLocaleString("en-US")} km gacha`);
-  if (parsed.minRangeKm) chips.push(`Range: ${parsed.minRangeKm.toLocaleString("en-US")} km+`);
+  if (parsed.minRangeKm) chips.push(`Yurish zaxirasi: ${parsed.minRangeKm.toLocaleString("en-US")} km+`);
   if (parsed.minBatteryHealthPercent) chips.push(`Batareya: ${parsed.minBatteryHealthPercent}%+`);
   if (parsed.customsStatus) chips.push("Bojxona: rasmiy");
   return chips;
 }
 
-function SellerScreen() {
-  const carFields = [
-    ["Marka", "BYD"],
-    ["Model", "Song Plus"],
-    ["Yil", "2024"],
-    ["Turi", "EV / REEV"],
-    ["Trim", "Flagship"],
-    ["Holati", "Yangi / ishlatilgan"]
-  ];
-  const usedFields = [
-    ["Probeg", "12 000 km"],
-    ["Batareya", "87 kWh"],
-    ["Range", "605 km"],
-    ["Batareya holati", "95%"],
-    ["Privod", "FWD / RWD / AWD"],
-    ["Bojxona", "Rasmiylashtirilgan"]
-  ];
-  const saleFields = [
-    ["Narx", "$28,900"],
-    ["Hudud", "Toshkent"],
-    ["Aniq manzil", "Yandex Maps orqali"],
-    ["Telefon", "+998 90 123 45 67"]
-  ];
+function SellerScreen({ telegramUser, onCreated }: { telegramUser?: TelegramUser; onCreated: (listing: ListingPrivate) => void }) {
+  const [step, setStep] = useState(0);
+  const [draft, setDraft] = useState<SellerDraft>({
+    make: "BYD",
+    model: "Song Plus",
+    year: "2024",
+    powertrainType: "EV",
+    trim: "Lyuks",
+    batteryKwh: "87",
+    rangeKm: "605",
+    rangeStandard: "CLTC",
+    motorPowerKw: "160",
+    driveType: "FWD",
+    condition: "Yangi olib kelingan",
+    batteryHealthPercent: "96",
+    customsStatus: "Rasmiylashtirilgan",
+    bodyColor: "Oq",
+    priceUsd: "28900",
+    mileageKm: "12000",
+    region: "Toshkent",
+    exactLocation: "Sergeli avtomobil bozori",
+    latitude: "",
+    longitude: "",
+    yandexMapUrl: "",
+    sellerPhone: "+998",
+    sellerTelegramUsername: telegramUser?.username ?? "",
+    description: "Xitoydan olib kelingan, batareya holati yaxshi, oilaviy krossover.",
+    photoUrls: "https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?auto=format&fit=crop&w=900&q=80"
+  });
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState("");
+  const stepTitles = ["Mashina", "EV texnika", "Sotuv", "Ko'rib chiqish"];
+
+  function updateDraft<K extends keyof SellerDraft>(key: K, value: SellerDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setStatus("Telefoningiz lokatsiyani qo'llab-quvvatlamadi. Yandex Maps havolasi yoki manzilni qo'lda kiriting.");
+      return;
+    }
+
+    setStatus("Lokatsiya olinmoqda...");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude.toFixed(6);
+        const longitude = position.coords.longitude.toFixed(6);
+        setDraft((current) => ({
+          ...current,
+          latitude,
+          longitude,
+          yandexMapUrl: `https://yandex.com/maps/?ll=${longitude},${latitude}&z=16&pt=${longitude},${latitude},pm2rdm`
+        }));
+        setStatus("Yandex Maps lokatsiya tayyor.");
+      },
+      () => setStatus("Lokatsiya uchun ruxsat berilmadi. Manzil yoki Yandex Maps havolasini kiriting."),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  async function publishListing() {
+    setSaving(true);
+    setStatus("");
+    try {
+      const created = await createSellerListing({
+        telegramId: telegramUser?.id ? String(telegramUser.id) : undefined,
+        sellerName: telegramUser?.first_name ?? "Sotuvchi",
+        sellerTelegramUsername: draft.sellerTelegramUsername || telegramUser?.username,
+        title: `${draft.make} ${draft.model} ${draft.year}`,
+        make: draft.make,
+        model: draft.model,
+        year: toNumber(draft.year, 2024),
+        powertrainType: draft.powertrainType,
+        trim: draft.trim || undefined,
+        batteryKwh: toOptionalNumber(draft.batteryKwh),
+        rangeKm: toOptionalNumber(draft.rangeKm),
+        rangeStandard: draft.rangeStandard,
+        motorPowerKw: toOptionalNumber(draft.motorPowerKw),
+        driveType: draft.driveType,
+        condition: draft.condition || undefined,
+        batteryHealthPercent: toOptionalNumber(draft.batteryHealthPercent),
+        customsStatus: draft.customsStatus || undefined,
+        bodyColor: draft.bodyColor || undefined,
+        priceUsd: toNumber(draft.priceUsd, 0),
+        mileageKm: toNumber(draft.mileageKm, 0),
+        region: draft.region,
+        exactLocation: draft.exactLocation || undefined,
+        latitude: toOptionalNumber(draft.latitude),
+        longitude: toOptionalNumber(draft.longitude),
+        yandexMapUrl: draft.yandexMapUrl || undefined,
+        sellerPhone: draft.sellerPhone || undefined,
+        description: draft.description,
+        photoUrls: draft.photoUrls.split(/\n|,/).map((url) => url.trim()).filter(Boolean)
+      });
+      onCreated(created);
+      setStatus("E'lon saqlandi. Endi AI qidiruv bu ma'lumotlardan foydalanadi.");
+    } catch {
+      setStatus("E'lon saqlanmadi. Telefon orqali kirish yoki internet sozlamasini tekshiring.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="grid gap-4">
       <section className="rounded-xl bg-white p-4 shadow-sm">
-        <p className="text-xs font-black uppercase text-brand">Seller mode</p>
+        <p className="text-xs font-black uppercase text-brand">Sotuvchi bo'limi</p>
         <h2 className="mt-1 text-2xl font-black">E'lon berish</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">Sotuvchi barcha muhim EV ma'lumotlarini kiritadi: probeg, batareya, range, holat, narx va xaritadagi lokatsiya.</p>
-      </section>
-
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-black">Mashina</h3>
-          <span className="rounded-md bg-brand/10 px-2 py-1 text-xs font-black text-brand">1/3</span>
-        </div>
-        <FieldGrid fields={carFields} />
-      </section>
-
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-black">Texnik holat</h3>
-          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">ishlatilgan auto</span>
-        </div>
-        <FieldGrid fields={usedFields} />
-      </section>
-
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <h3 className="font-black">Sotuv va lokatsiya</h3>
-        <div className="mt-4 grid gap-3">
-          <FieldGrid fields={saleFields} />
-          <button className="flex h-12 items-center justify-center gap-2 rounded-md border border-brand/30 bg-brand/10 text-sm font-black text-brand">
-            <Navigation className="h-4 w-4" /> Yandex Maps orqali lokatsiya tanlash
-          </button>
-          <button className="h-12 rounded-md bg-brand text-sm font-black text-white">E'lonni ko'rib chiqish</button>
+        <p className="mt-2 text-sm leading-6 text-slate-600">AI yaxshi topishi uchun probeg, batareya, yurish zaxirasi, narx va Yandex Maps manzilini aniq kiriting.</p>
+        <div className="mt-4 grid grid-cols-4 gap-1">
+          {stepTitles.map((title, index) => (
+            <button
+              key={title}
+              onClick={() => setStep(index)}
+              className={`min-h-10 rounded-md px-1 text-[11px] font-black leading-3 ${step === index ? "bg-brand text-white" : "bg-slate-100 text-slate-600"}`}
+            >
+              {index + 1}. {title}
+            </button>
+          ))}
         </div>
       </section>
+
+      {step === 0 ? (
+        <SellerPanel title="Mashina ma'lumotlari" badge="1/4">
+          <SellerTextInput label="Marka" value={draft.make} onChange={(value) => updateDraft("make", value)} placeholder="BYD" />
+          <SellerTextInput label="Model" value={draft.model} onChange={(value) => updateDraft("model", value)} placeholder="Song Plus" />
+          <SellerTextInput label="Yil" value={draft.year} onChange={(value) => updateDraft("year", value)} placeholder="2024" inputMode="numeric" />
+          <SellerSelect label="EV turi" value={draft.powertrainType} onChange={(value) => updateDraft("powertrainType", value as SellerDraft["powertrainType"])} options={["EV", "REEV", "PHEV", "HYBRID"]} />
+          <SellerTextInput label="Komplektatsiya/modifikatsiya" value={draft.trim} onChange={(value) => updateDraft("trim", value)} placeholder="Standart / Pro / Max / Lyuks" />
+          <SellerTextInput label="Holati" value={draft.condition} onChange={(value) => updateDraft("condition", value)} placeholder="Yangi / yaxshi / a'lo" />
+        </SellerPanel>
+      ) : null}
+
+      {step === 1 ? (
+        <SellerPanel title="EV texnika va probeg" badge="2/4">
+          <SellerTextInput label="Probeg, km" value={draft.mileageKm} onChange={(value) => updateDraft("mileageKm", value)} placeholder="12000" inputMode="numeric" />
+          <SellerTextInput label="Batareya, kWh" value={draft.batteryKwh} onChange={(value) => updateDraft("batteryKwh", value)} placeholder="87" inputMode="decimal" />
+          <SellerTextInput label="Yurish zaxirasi, km" value={draft.rangeKm} onChange={(value) => updateDraft("rangeKm", value)} placeholder="605" inputMode="numeric" />
+          <SellerSelect label="Zaxira standarti" value={draft.rangeStandard} onChange={(value) => updateDraft("rangeStandard", value as SellerDraft["rangeStandard"])} options={["CLTC", "WLTP", "EPA", "UNKNOWN"]} />
+          <SellerTextInput label="Batareya holati, %" value={draft.batteryHealthPercent} onChange={(value) => updateDraft("batteryHealthPercent", value)} placeholder="95" inputMode="numeric" />
+          <SellerTextInput label="Motor quvvati, kW" value={draft.motorPowerKw} onChange={(value) => updateDraft("motorPowerKw", value)} placeholder="160" inputMode="numeric" />
+          <SellerSelect label="Tortish turi (privod)" value={draft.driveType} onChange={(value) => updateDraft("driveType", value as SellerDraft["driveType"])} options={["UNKNOWN", "FWD", "RWD", "AWD"]} />
+          <SellerTextInput label="Bojxona" value={draft.customsStatus} onChange={(value) => updateDraft("customsStatus", value)} placeholder="Rasmiylashtirilgan" />
+          <SellerTextInput label="Rangi" value={draft.bodyColor} onChange={(value) => updateDraft("bodyColor", value)} placeholder="Oq" />
+        </SellerPanel>
+      ) : null}
+
+      {step === 2 ? (
+        <SellerPanel title="Sotuv va lokatsiya" badge="3/4">
+          <SellerTextInput label="Narx, USD" value={draft.priceUsd} onChange={(value) => updateDraft("priceUsd", value)} placeholder="28900" inputMode="numeric" />
+          <SellerTextInput label="Hudud" value={draft.region} onChange={(value) => updateDraft("region", value)} placeholder="Toshkent" />
+          <SellerTextInput label="Aniq manzil" value={draft.exactLocation} onChange={(value) => updateDraft("exactLocation", value)} placeholder="Sergeli avtomobil bozori" />
+          <SellerTextInput label="Telefon" value={draft.sellerPhone} onChange={(value) => updateDraft("sellerPhone", value)} placeholder="+998901234567" inputMode="tel" />
+          <SellerTextInput label="Telegram username" value={draft.sellerTelegramUsername} onChange={(value) => updateDraft("sellerTelegramUsername", value)} placeholder="avto_sotuvchi" />
+          <div className="col-span-2 grid gap-2">
+            <button onClick={useCurrentLocation} className="flex h-12 items-center justify-center gap-2 rounded-md border border-brand/30 bg-brand/10 text-sm font-black text-brand">
+              <MapPinned className="h-4 w-4" /> Hozirgi lokatsiyadan Yandex Maps yaratish
+            </button>
+            <SellerTextInput label="Yandex Maps havolasi" value={draft.yandexMapUrl} onChange={(value) => updateDraft("yandexMapUrl", value)} placeholder="https://yandex.com/maps/..." />
+          </div>
+        </SellerPanel>
+      ) : null}
+
+      {step === 3 ? (
+        <section className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="font-black">Ko'rib chiqish</h3>
+            <span className="rounded-md bg-brand/10 px-2 py-1 text-xs font-black text-brand">4/4</span>
+          </div>
+          <div className="mt-4 rounded-lg border border-line p-3">
+            <p className="text-lg font-black">{draft.make} {draft.model} {draft.year}</p>
+            <p className="mt-1 text-2xl font-black text-brand">${toNumber(draft.priceUsd, 0).toLocaleString("en-US")}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600">
+              <span className="flex items-center gap-1"><Zap className="h-4 w-4 text-brand" />{draft.powertrainType} · {draft.trim}</span>
+              <span className="flex items-center gap-1"><Gauge className="h-4 w-4" />{toNumber(draft.mileageKm, 0).toLocaleString("en-US")} km</span>
+              <span className="flex items-center gap-1"><BatteryCharging className="h-4 w-4 text-cobalt" />{draft.rangeKm || "-"} km</span>
+              <span className="flex items-center gap-1"><MapPin className="h-4 w-4" />{draft.region}</span>
+            </div>
+          </div>
+          <label className="mt-4 grid gap-1 text-sm font-bold">
+            Tavsif
+            <textarea value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} rows={4} className="rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-brand" />
+          </label>
+          <label className="mt-3 grid gap-1 text-sm font-bold">
+            Rasm havolasi
+            <textarea value={draft.photoUrls} onChange={(event) => updateDraft("photoUrls", event.target.value)} rows={3} placeholder="Har qatorga bitta rasm havolasi" className="rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-brand" />
+          </label>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button onClick={() => setStep(0)} className="h-12 rounded-md bg-slate-100 text-sm font-black text-slate-700">Tahrirlash</button>
+            <button onClick={publishListing} disabled={saving} className="flex h-12 items-center justify-center gap-2 rounded-md bg-brand text-sm font-black text-white disabled:opacity-70">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Saqlash
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {status ? (
+        <div className="flex items-start gap-2 rounded-xl bg-white p-3 text-sm font-semibold leading-6 text-slate-700 shadow-sm">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+          <span>{status}</span>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-2">
+        <button disabled={step === 0} onClick={() => setStep((current) => Math.max(0, current - 1))} className="h-11 rounded-md bg-slate-100 text-sm font-black text-slate-700 disabled:opacity-40">Orqaga</button>
+        <button disabled={step === 3} onClick={() => setStep((current) => Math.min(3, current + 1))} className="h-11 rounded-md bg-ink text-sm font-black text-white disabled:opacity-40">Keyingi</button>
+      </div>
     </div>
   );
 }
 
-function FieldGrid({ fields }: { fields: string[][] }) {
+function SellerPanel({ title, badge, children }: { title: string; badge: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {fields.map(([label, value], index) => (
-        <label key={label} className={index === fields.length - 1 && fields.length % 2 === 1 ? "col-span-2 grid gap-1 text-sm font-bold" : "grid gap-1 text-sm font-bold"}>
-          {label}
-          <input placeholder={value} className="h-11 rounded-md border border-line px-3 text-sm outline-none focus:border-brand" />
-        </label>
-      ))}
-    </div>
+    <section className="rounded-xl bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-black">{title}</h3>
+        <span className="rounded-md bg-brand/10 px-2 py-1 text-xs font-black text-brand">{badge}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">{children}</div>
+    </section>
   );
 }
 
-function ProfileScreen({ listings }: { listings: ListingPrivate[] }) {
+function SellerTextInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  inputMode = "text"
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  inputMode?: "text" | "numeric" | "decimal" | "tel";
+}) {
+  return (
+    <label className="grid gap-1 text-sm font-bold">
+      {label}
+      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} inputMode={inputMode} className="h-11 min-w-0 rounded-md border border-line px-3 text-sm outline-none focus:border-brand" />
+    </label>
+  );
+}
+
+function SellerSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
+  return (
+    <label className="grid gap-1 text-sm font-bold">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 min-w-0 rounded-md border border-line bg-white px-3 text-sm outline-none focus:border-brand">
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function toNumber(value: string, fallback: number) {
+  const numeric = Number(value.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function toOptionalNumber(value: string) {
+  const numeric = toNumber(value, Number.NaN);
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function ProfileScreen({ listings, onStatusChange }: { listings: ListingPrivate[]; onStatusChange: (id: string, status: "ACTIVE" | "SOLD" | "ARCHIVED") => void }) {
+  const visibleListings = listings.filter((listing) => listing.status !== "ARCHIVED");
+  const [status, setStatus] = useState("");
+
+  async function changeStatus(id: string, nextStatus: "SOLD" | "ARCHIVED") {
+    onStatusChange(id, nextStatus);
+    setStatus(nextStatus === "SOLD" ? "E'lon sotildi deb belgilandi." : "E'lon o'chirildi.");
+    try {
+      await updateListingStatus(id, nextStatus);
+    } catch {
+      setStatus("Sinov rejimida o'zgardi. Server ulanganda bazaga ham yoziladi.");
+    }
+  }
+
   return (
     <div className="grid gap-4">
       <section className="rounded-xl bg-ink p-4 text-white">
@@ -459,7 +751,17 @@ function ProfileScreen({ listings }: { listings: ListingPrivate[] }) {
 
       <section className="grid gap-3">
         <h3 className="text-lg font-black">Mening e'lonlarim</h3>
-        {listings.slice(0, 1).map((listing) => <MiniListingCard key={listing.id} listing={listing} sellerMode />)}
+        {status ? <p className="rounded-lg bg-white p-3 text-sm font-semibold text-slate-600 shadow-sm">{status}</p> : null}
+        {visibleListings.map((listing) => (
+          <MiniListingCard
+            key={listing.id}
+            listing={listing}
+            sellerMode
+            onSold={() => void changeStatus(listing.id, "SOLD")}
+            onArchive={() => void changeStatus(listing.id, "ARCHIVED")}
+          />
+        ))}
+        {!visibleListings.length ? <p className="rounded-xl bg-white p-4 text-sm font-semibold text-slate-600 shadow-sm">Hali e'lon yo'q. Sotish bo'limidan birinchi e'lonni qo'shing.</p> : null}
       </section>
     </div>
   );
@@ -471,7 +773,9 @@ function MiniListingCard({
   score,
   rank,
   confidence,
-  onContactClick
+  onContactClick,
+  onSold,
+  onArchive
 }: {
   listing: ListingPublic;
   sellerMode?: boolean;
@@ -479,6 +783,8 @@ function MiniListingCard({
   rank?: number;
   confidence?: "high" | "medium" | "low";
   onContactClick?: (listing: ListingPublic) => void;
+  onSold?: () => void;
+  onArchive?: () => void;
 }) {
   return (
     <article className="overflow-hidden rounded-xl bg-white shadow-sm">
@@ -504,8 +810,8 @@ function MiniListingCard({
         </div>
         {sellerMode ? (
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <button className="h-10 rounded-md bg-slate-100 text-xs font-black">Sotildi</button>
-            <button className="h-10 rounded-md bg-red-50 text-xs font-black text-red-600">O'chirish</button>
+            <button onClick={onSold} className="h-10 rounded-md bg-slate-100 text-xs font-black">{listing.status === "SOLD" ? "Sotilgan" : "Sotildi"}</button>
+            <button onClick={onArchive} className="h-10 rounded-md bg-red-50 text-xs font-black text-red-600">O'chirish</button>
           </div>
         ) : (
           <button onClick={() => onContactClick?.(listing)} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-brand text-sm font-black text-white">
@@ -524,15 +830,73 @@ function confidenceLabel(confidence?: "high" | "medium" | "low") {
   return "AI";
 }
 
-function LockedContactSheet({ listing, telegram, onClose, onLogin }: { listing: ListingPublic; telegram?: TelegramWebApp; onClose: () => void; onLogin: () => void }) {
-  function handleLogin() {
-    telegram?.showPopup?.({
-      title: "Kirish kerak",
-      message: "Telefon raqam bilan kirgandan keyin sotuvchi telefoni va Yandex Maps lokatsiyasi ochiladi.",
-      buttons: [{ type: "ok", text: "Tushunarli" }]
-    });
-    onLogin();
-    onClose();
+function LockedContactSheet({
+  listing,
+  telegram,
+  buyerSession,
+  localPrivateListing,
+  onSession,
+  onClose
+}: {
+  listing: ListingPublic;
+  telegram?: TelegramWebApp;
+  buyerSession: BuyerSession | null;
+  localPrivateListing?: ListingPrivate;
+  onSession: (session: BuyerSession) => void;
+  onClose: () => void;
+}) {
+  const [phone, setPhone] = useState("+998");
+  const [code, setCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [unlockedListing, setUnlockedListing] = useState<ListingPrivate | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!buyerSession) return;
+    void unlockContact(buyerSession);
+  }, [buyerSession, listing.id]);
+
+  async function sendOtp() {
+    setLoading(true);
+    setMessage("");
+    try {
+      await requestPhoneOtp(phone, telegram?.initDataUnsafe?.user?.first_name);
+      setOtpSent(true);
+      setMessage("Tasdiqlash kodi yuborildi. Sinov kodi: 111111");
+    } catch {
+      setMessage("Kod yuborilmadi. Telefon raqamni +998 bilan to'g'ri kiriting.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyAndUnlock() {
+    setLoading(true);
+    setMessage("");
+    try {
+      const session = await verifyPhoneOtp(phone, code, telegram?.initDataUnsafe?.user?.first_name);
+      onSession(session);
+      await unlockContact(session);
+    } catch {
+      setMessage("Kod noto'g'ri yoki kirish ishlamadi. Sinov kodi: 111111");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function unlockContact(session: BuyerSession) {
+    setLoading(true);
+    setMessage("");
+    try {
+      const privateListing = await getPrivateListing(listing.id, session.userId).catch(() => null) ?? localPrivateListing ?? null;
+      setUnlockedListing(privateListing);
+      if (!privateListing) setMessage("E'lon topilmadi.");
+    } catch {
+      setMessage("Kontaktni ochib bo'lmadi. Internet yoki API sozlamasini tekshiring.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -540,20 +904,59 @@ function LockedContactSheet({ listing, telegram, onClose, onLogin }: { listing: 
       <div className="rounded-t-2xl bg-white p-4 shadow-2xl ring-1 ring-black/5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase text-brand">Guest mode</p>
-            <h3 className="mt-1 text-lg font-black">Kontaktlar yopiq</h3>
+            <p className="text-xs font-black uppercase text-brand">{unlockedListing ? "Xaridor bo'limi" : "Mehmon rejimi"}</p>
+            <h3 className="mt-1 text-lg font-black">{unlockedListing ? "Kontaktlar ochildi" : "Kontaktlar yopiq"}</h3>
           </div>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-600">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="mt-3 text-sm leading-6 text-slate-600">
-          {listing.title} sotuvchisining telefoni va aniq Yandex Maps lokatsiyasini ko'rish uchun telefon raqam bilan kiring.
-        </p>
-        <div className="mt-4 grid gap-2">
-          <button onClick={handleLogin} className="h-12 rounded-md bg-brand text-sm font-black text-white">Telefon bilan kirish</button>
-          <button onClick={onClose} className="h-11 rounded-md bg-slate-100 text-sm font-black text-slate-700">Hozircha ko'rish</button>
-        </div>
+
+        {unlockedListing ? (
+          <div className="mt-4 grid gap-3">
+            <div className="rounded-lg border border-line p-3">
+              <p className="font-black">{unlockedListing.title}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-600">{unlockedListing.exactLocation ?? "Aniq lokatsiya kiritilmagan"}</p>
+            </div>
+            <a href={`tel:${unlockedListing.sellerPhone ?? ""}`} className="flex h-12 items-center justify-center gap-2 rounded-md bg-brand text-sm font-black text-white">
+              <Phone className="h-4 w-4" /> {unlockedListing.sellerPhone ?? "Telefon kiritilmagan"}
+            </a>
+            {unlockedListing.yandexMapUrl ? (
+              <a href={unlockedListing.yandexMapUrl} target="_blank" rel="noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-md bg-slate-100 text-sm font-black text-slate-800">
+                <ExternalLink className="h-4 w-4" /> Yandex Maps ochish
+              </a>
+            ) : null}
+            {unlockedListing.sellerTelegramUsername ? (
+              <a href={`https://t.me/${unlockedListing.sellerTelegramUsername.replace(/^@/, "")}`} target="_blank" rel="noreferrer" className="h-11 rounded-md bg-slate-100 text-center text-sm font-black leading-[44px] text-slate-800">
+                Telegram: @{unlockedListing.sellerTelegramUsername.replace(/^@/, "")}
+              </a>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              {listing.title} sotuvchisining telefoni va aniq Yandex Maps manzilini ko'rish uchun telefon raqam bilan kiring.
+            </p>
+            <div className="mt-4 grid gap-3">
+              <label className="grid gap-1 text-sm font-bold">
+                Telefon raqam
+                <input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" className="h-12 rounded-md border border-line px-3 text-sm outline-none focus:border-brand" placeholder="+998901234567" />
+              </label>
+              {otpSent ? (
+                <label className="grid gap-1 text-sm font-bold">
+                  Tasdiqlash kodi
+                  <input value={code} onChange={(event) => setCode(event.target.value)} inputMode="numeric" className="h-12 rounded-md border border-line px-3 text-sm outline-none focus:border-brand" placeholder="111111" />
+                </label>
+              ) : null}
+              {message ? <p className="rounded-md bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">{message}</p> : null}
+              <button onClick={otpSent ? verifyAndUnlock : sendOtp} disabled={loading} className="flex h-12 items-center justify-center gap-2 rounded-md bg-brand text-sm font-black text-white disabled:opacity-70">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                {otpSent ? "Kontaktni ochish" : "Kod olish"}
+              </button>
+              <button onClick={onClose} className="h-11 rounded-md bg-slate-100 text-sm font-black text-slate-700">Hozircha ko'rish</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

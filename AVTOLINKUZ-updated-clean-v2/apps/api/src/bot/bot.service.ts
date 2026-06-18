@@ -20,12 +20,12 @@ const sellerQuestions: Array<{ key: keyof CreateListingDto; text: string }> = [
   { key: "make", text: "Marka: masalan, BYD" },
   { key: "model", text: "Model: masalan, Song Plus" },
   { key: "year", text: "Yil: masalan, 2024" },
-  { key: "powertrainType", text: "Turi: EV, REEV, PHEV yoki HYBRID" },
-  { key: "trim", text: "Trim/modifikatsiya: masalan, Flagship" },
+  { key: "powertrainType", text: "Turi: EV, REEV, PHEV yoki gibrid" },
+  { key: "trim", text: "Komplektatsiya/modifikatsiya: masalan, Lyuks" },
   { key: "batteryKwh", text: "Batareya kWh: bilmasangiz 0" },
   { key: "batteryHealthPercent", text: "Batareya holati foizda: masalan, 95" },
-  { key: "rangeKm", text: "Yurish masofasi km: masalan, 605" },
-  { key: "driveType", text: "Privod: FWD, RWD, AWD yoki UNKNOWN" },
+  { key: "rangeKm", text: "Yurish zaxirasi km: masalan, 605" },
+  { key: "driveType", text: "Tortish turi (privod): FWD, RWD, AWD yoki bilmayman" },
   { key: "bodyColor", text: "Rangi: masalan, oq" },
   { key: "vin", text: "VIN raqam: bo'lmasa yo'q deb yozing" },
   { key: "priceUsd", text: "Narx USD: masalan, 28500" },
@@ -33,10 +33,10 @@ const sellerQuestions: Array<{ key: keyof CreateListingDto; text: string }> = [
   { key: "customsStatus", text: "Bojxona holati: masalan, rasmiylashtirilgan" },
   { key: "condition", text: "Holati: masalan, A'lo, yangi olib kelingan" },
   { key: "region", text: "Hudud: masalan, Toshkent" },
-  { key: "exactLocation", text: "Aniq lokatsiya yoki manzil. Telegram lokatsiya yuborsangiz ham bo'ladi." },
+  { key: "exactLocation", text: "Aniq manzil. Telegram lokatsiya yuborsangiz ham bo'ladi." },
   { key: "sellerPhone", text: "Telefon: masalan, +998901234567" },
   { key: "sellerTelegramUsername", text: "Telegram username: bo'lmasa yo'q deb yozing" },
-  { key: "photoUrls", text: "Rasm URL: bo'lmasa yo'q deb yozing" },
+  { key: "photoUrls", text: "Rasm havolasi: bo'lmasa yo'q deb yozing" },
   { key: "description", text: "Qisqa tavsif" }
 ];
 
@@ -79,7 +79,7 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
         Markup.inlineKeyboard([
           [Markup.button.callback("BYD EV 20 minggacha", "quick:20 ming dollargacha BYD EV")],
           [Markup.button.callback("Oilaga mos REEV", "quick:oilaga mos REEV")],
-          [Markup.button.callback("Range 500 km+", "quick:range 500 km dan yuqori")]
+          [Markup.button.callback("Zaxira 500 km+", "quick:yurish zaxirasi 500 km dan yuqori")]
         ])
       );
     });
@@ -105,7 +105,7 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
 
       const listing = await this.listingsService.getPrivate(listingId, state.userId);
       await ctx.reply(
-        `Kontaktlar:\nTelefon: ${listing.sellerPhone ?? "kiritilmagan"}\nTelegram: ${listing.sellerTelegramUsername ?? "kiritilmagan"}\nLokatsiya: ${listing.exactLocation ?? "kiritilmagan"}\nYandex Maps: ${listing.yandexMapUrl ?? "kiritilmagan"}`
+        `Kontaktlar:\nTelefon: ${listing.sellerPhone ?? "kiritilmagan"}\nTelegram: ${listing.sellerTelegramUsername ?? "kiritilmagan"}\nManzil: ${listing.exactLocation ?? "kiritilmagan"}\nYandex Maps: ${listing.yandexMapUrl ?? "kiritilmagan"}`
       );
     });
 
@@ -147,13 +147,13 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
     bot.on("location", async (ctx) => {
       const state = this.getState(ctx);
       if (state.mode !== "seller_post" || !state.pendingListing) {
-        return ctx.reply("Lokatsiya e'lon berish jarayonida qabul qilinadi.");
+        return ctx.reply("Manzil e'lon berish jarayonida qabul qilinadi.");
       }
 
       const { latitude, longitude } = ctx.message.location;
       const pendingListing = {
         ...state.pendingListing,
-        exactLocation: "Telegram orqali yuborilgan lokatsiya",
+        exactLocation: "Telegram orqali yuborilgan manzil",
         latitude,
         longitude,
         yandexMapUrl: this.buildYandexMapUrl(latitude, longitude)
@@ -181,13 +181,13 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
         `${listing.make} ${listing.model} ${listing.year}\n\n` +
           `Narx: $${listing.priceUsd.toLocaleString("en-US")}\n` +
           `Turi: ${listing.powertrainType}${listing.trim ? `, ${listing.trim}` : ""}\n` +
-          `Range: ${listing.rangeKm ? `${listing.rangeKm.toLocaleString("en-US")} km` : "kiritilmagan"}\n` +
+          `Yurish zaxirasi: ${listing.rangeKm ? `${listing.rangeKm.toLocaleString("en-US")} km` : "kiritilmagan"}\n` +
           `Probeg: ${listing.mileageKm.toLocaleString("en-US")} km\n` +
           `Batareya: ${listing.batteryHealthPercent ? `${listing.batteryHealthPercent}%` : "kiritilmagan"}\n` +
           `Bojxona: ${listing.customsStatus ?? "kiritilmagan"}\n` +
           `Hudud: ${listing.region}\n\n` +
           `${result.explanationUz}\n${result.nextActionUz ?? ""}`,
-        Markup.inlineKeyboard([Markup.button.callback("Telefon va lokatsiyani ko'rish", `reveal:${listing.id}`)])
+        Markup.inlineKeyboard([Markup.button.callback("Telefon va manzilni ko'rish", `reveal:${listing.id}`)])
       );
     }
   }
@@ -212,7 +212,7 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
 
     const session = await this.authService.verifyPhoneOtp({ phone: state.phone, code });
     this.setState(ctx, { ...state, mode: "idle", userId: session.userId });
-    await this.showMenu(ctx, "Kirish muvaffaqiyatli. Endi kontakt va lokatsiyani ko'rishingiz mumkin.");
+    await this.showMenu(ctx, "Kirish muvaffaqiyatli. Endi kontakt va aniq manzilni ko'rishingiz mumkin.");
   }
 
   private async startSellerPost(ctx: Context) {

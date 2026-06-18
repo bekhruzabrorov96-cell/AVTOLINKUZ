@@ -9,7 +9,7 @@ const makes = ["BYD", "Li Auto", "Zeekr", "Nio", "Xpeng"];
 const quickSearches = [
   "20 ming dollargacha BYD EV",
   "oilaga mos REEV",
-  "range 500 km dan yuqori",
+  "yurish zaxirasi 500 km dan yuqori",
   "kam yurgan Zeekr"
 ];
 
@@ -63,15 +63,15 @@ export default async function HomePage() {
             </div>
             <div className="grid gap-2 rounded-lg bg-white p-4 text-ink shadow-xl">
               <div className="flex items-center gap-2 text-sm font-bold"><LockKeyhole className="h-4 w-4 text-brand" />Kontaktlar himoyalangan</div>
-              <p className="text-sm leading-6 text-slate-600">Guest narx va tavsifni ko'radi. Telefon va aniq lokatsiya login qilingandan keyin ochiladi.</p>
+              <p className="text-sm leading-6 text-slate-600">Mehmon narx va tavsifni ko'radi. Telefon va aniq manzil telefon orqali kirgandan keyin ochiladi.</p>
             </div>
           </div>
         </div>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-3">
-        <Feature icon={<BatteryCharging className="h-5 w-5" />} title="EV/REEV fokus" text="Batareya, range, trim va privod bo'yicha solishtiring." />
-        <Feature icon={<ShieldCheck className="h-5 w-5" />} title="Kontakt nazorati" text="Seller telefoni va lokatsiya faqat login bilan ochiladi." />
+        <Feature icon={<BatteryCharging className="h-5 w-5" />} title="EV/REEV fokus" text="Batareya, yurish zaxirasi, komplektatsiya va privod bo'yicha solishtiring." />
+        <Feature icon={<ShieldCheck className="h-5 w-5" />} title="Kontakt nazorati" text="Sotuvchi telefoni va aniq manzil faqat telefon orqali kirgandan keyin ochiladi." />
         <Feature icon={<Zap className="h-5 w-5" />} title="Tez qidiruv" text="Uzbek tilida yozilgan so'rovdan mos e'lonlar topiladi." />
       </section>
 

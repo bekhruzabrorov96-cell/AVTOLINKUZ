@@ -30,8 +30,8 @@ export default async function ListingDetailPage({ params }: { params: Promise<{ 
             <Fact icon={<Zap className="h-4 w-4" />} label="Yil" value={String(listing.year)} />
             <Fact icon={<Gauge className="h-4 w-4" />} label="Probeg" value={`${listing.mileageKm.toLocaleString("en-US")} km`} />
             <Fact icon={<Zap className="h-4 w-4" />} label="EV turi" value={listing.powertrainType} />
-            <Fact icon={<Zap className="h-4 w-4" />} label="Trim" value={listing.trim ?? "Kiritilmagan"} />
-            <Fact icon={<BatteryCharging className="h-4 w-4" />} label="Range" value={listing.rangeKm ? `${listing.rangeKm.toLocaleString("en-US")} km ${listing.rangeStandard ?? ""}` : "Kiritilmagan"} />
+            <Fact icon={<Zap className="h-4 w-4" />} label="Komplektatsiya" value={listing.trim ?? "Kiritilmagan"} />
+            <Fact icon={<BatteryCharging className="h-4 w-4" />} label="Yurish zaxirasi" value={listing.rangeKm ? `${listing.rangeKm.toLocaleString("en-US")} km ${listing.rangeStandard ?? ""}` : "Kiritilmagan"} />
             <Fact icon={<BatteryCharging className="h-4 w-4" />} label="Batareya" value={listing.batteryKwh ? `${listing.batteryKwh} kWh` : "Kiritilmagan"} />
             <Fact icon={<BatteryCharging className="h-4 w-4" />} label="Batareya holati" value={listing.batteryHealthPercent ? `${listing.batteryHealthPercent}%` : "Kiritilmagan"} />
             <Fact icon={<Zap className="h-4 w-4" />} label="Bojxona" value={listing.customsStatus ?? "Kiritilmagan"} />
@@ -51,7 +51,7 @@ export default async function ListingDetailPage({ params }: { params: Promise<{ 
         <p className="mt-1 text-sm text-slate-600">{listing.region}</p>
         <div className="mt-4 rounded-lg bg-brand/10 p-4 text-sm leading-6 text-slate-700 ring-1 ring-brand/20">
           <LockKeyhole className="mb-2 h-5 w-5 text-brand" />
-          Telefon raqam va aniq lokatsiyani ko'rish uchun telefon raqam bilan kiring.
+          Telefon raqam va aniq manzilni ko'rish uchun telefon raqam bilan kiring.
         </div>
         <div className="mt-4 grid gap-2">
           <button className="primary-button h-12">

@@ -22,7 +22,7 @@ export default async function AiSearchPage({ searchParams }: { searchParams: Sea
             Uzbek tilida AI qidiruv
           </div>
           <h1 className="mt-3 text-2xl font-black">Qanday Xitoy EV kerak?</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">Byudjet, marka, range, probeg yoki oilaviy foydalanishni yozing. Natijalar ichki e'lonlardan tanlanadi.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">Byudjet, marka, yurish zaxirasi, probeg yoki oilaviy foydalanishni yozing. Natijalar ichki e'lonlardan tanlanadi.</p>
         </div>
         <form className="grid gap-3 p-4 sm:grid-cols-[1fr_auto]">
           <input name="q" defaultValue={query} placeholder="Masalan: 20 ming dollargacha, BYD EV, yurishi kam" className="form-control h-12" />
@@ -37,7 +37,7 @@ export default async function AiSearchPage({ searchParams }: { searchParams: Sea
         {query ? <p className="text-sm font-medium text-slate-600">{results.length} ta mos e'lon topildi</p> : (
           <div className="app-panel p-5 text-sm leading-6 text-slate-600">
             <Bot className="mb-3 h-6 w-6 text-brand" />
-            Masalan: "oilaga mos REEV", "30 minggacha Zeekr", yoki "range 500 km dan yuqori" deb yozing.
+            Masalan: "oilaga mos REEV", "30 minggacha Zeekr", yoki "yurish zaxirasi 500 km dan yuqori" deb yozing.
           </div>
         )}
         {results.map((result) => (

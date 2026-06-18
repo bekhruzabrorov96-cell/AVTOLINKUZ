@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CarFront, PlusCircle, Search } from "lucide-react";
+import { PlusCircle, Search } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
+import { BrandMark } from "@/components/brand-mark";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,7 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <header className="sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
             <Link href="/" className="flex min-w-0 items-center gap-2 text-lg font-bold text-ink">
-              <span className="grid h-10 w-10 place-items-center rounded-lg bg-ink text-white shadow-sm"><CarFront className="h-5 w-5" /></span>
+              <BrandMark className="h-10 w-10 shrink-0 drop-shadow-sm" />
               <span className="leading-tight">Avtolink.uz</span>
             </Link>
             <nav className="hidden items-center gap-2 text-sm font-medium text-slate-700 md:flex">
