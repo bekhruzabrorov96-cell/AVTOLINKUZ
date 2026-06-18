@@ -92,6 +92,7 @@ export interface AiSearchResult {
   confidenceLabel?: "high" | "medium" | "low";
   matchedFilters: ListingFilters;
   explanationUz: string;
+  priceInsightUz?: string;
   nextActionUz?: string;
 }
 

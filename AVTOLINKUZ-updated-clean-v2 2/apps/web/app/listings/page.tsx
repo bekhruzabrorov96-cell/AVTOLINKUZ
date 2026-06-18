@@ -40,19 +40,19 @@ export default async function ListingsPage({ searchParams }: { searchParams: Sea
             <option value="EV">EV</option>
             <option value="REEV">REEV</option>
             <option value="PHEV">PHEV</option>
-            <option value="HYBRID">Hybrid</option>
+            <option value="HYBRID">Gibrid</option>
           </select>
           <div className="grid grid-cols-2 gap-2">
-            <input name="minPrice" defaultValue={value(params.minPrice)} placeholder="Min $" inputMode="numeric" className="form-control" />
-            <input name="maxPrice" defaultValue={value(params.maxPrice)} placeholder="Max $" inputMode="numeric" className="form-control" />
+            <input name="minPrice" defaultValue={value(params.minPrice)} placeholder="Narxdan" inputMode="numeric" className="form-control" />
+            <input name="maxPrice" defaultValue={value(params.maxPrice)} placeholder="Narxgacha" inputMode="numeric" className="form-control" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <input name="minYear" defaultValue={value(params.minYear)} placeholder="Yildan" inputMode="numeric" className="form-control" />
             <input name="maxYear" defaultValue={value(params.maxYear)} placeholder="Yilgacha" inputMode="numeric" className="form-control" />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input name="maxMileageKm" defaultValue={value(params.maxMileageKm)} placeholder="Max km" inputMode="numeric" className="form-control" />
-            <input name="minRangeKm" defaultValue={value(params.minRangeKm)} placeholder="Min range" inputMode="numeric" className="form-control" />
+            <input name="maxMileageKm" defaultValue={value(params.maxMileageKm)} placeholder="Probeggacha" inputMode="numeric" className="form-control" />
+            <input name="minRangeKm" defaultValue={value(params.minRangeKm)} placeholder="Zaxira km dan" inputMode="numeric" className="form-control" />
           </div>
           <button className="primary-button"><Search className="h-4 w-4" />Topish</button>
         </form>

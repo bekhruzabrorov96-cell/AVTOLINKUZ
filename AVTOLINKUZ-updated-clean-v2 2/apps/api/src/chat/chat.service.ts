@@ -15,6 +15,15 @@ export class ChatService {
     });
   }
 
+  listMessages(chatId: string) {
+    return this.prisma.message.findMany({
+      where: { chatId },
+      include: { sender: true },
+      orderBy: { createdAt: "asc" },
+      take: 100
+    });
+  }
+
   createMessage(input: { chatId: string; senderId: string; body: string }) {
     return this.prisma.message.create({
       data: input,

@@ -8,7 +8,7 @@ export const featuredListings: ListingPrivate[] = [
     model: "Song Plus",
     year: 2024,
     powertrainType: "EV",
-    trim: "Flagship",
+    trim: "Lyuks",
     batteryKwh: 87,
     rangeKm: 605,
     rangeStandard: "CLTC",

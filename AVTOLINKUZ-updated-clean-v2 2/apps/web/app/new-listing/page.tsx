@@ -9,9 +9,9 @@ export default function NewListingPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-4">
-        <p className="text-sm font-bold text-brand">Seller mode</p>
+        <p className="text-sm font-bold text-brand">Sotuvchi bo'limi</p>
         <h1 className="mt-1 text-2xl font-black text-ink">Mashina e'loni yaratish</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">EV/REEV xaridorlari tez solishtirishi uchun range, batareya, trim va kontaktlarni aniq kiriting.</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">EV/REEV xaridorlari tez solishtirishi uchun yurish zaxirasi, batareya, komplektatsiya va kontaktlarni aniq kiriting.</p>
       </div>
 
       <form className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -27,10 +27,10 @@ export default function NewListingPage() {
                 <option value="EV">EV</option>
                 <option value="REEV">REEV</option>
                 <option value="PHEV">PHEV</option>
-                <option value="HYBRID">Hybrid</option>
+                <option value="HYBRID">Gibrid</option>
               </select>
             </label>
-            <Field name="trim" label="Trim/modifikatsiya" placeholder="Flagship" />
+            <Field name="trim" label="Komplektatsiya/modifikatsiya" placeholder="Lyuks" />
             <Field name="condition" label="Holati" placeholder="A'lo" />
           </div>
 
@@ -38,10 +38,10 @@ export default function NewListingPage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Field name="batteryKwh" label="Batareya, kWh" placeholder="87" />
             <Field name="batteryHealthPercent" label="Batareya holati, %" placeholder="95" />
-            <Field name="rangeKm" label="Yurish masofasi, km" placeholder="605" />
+            <Field name="rangeKm" label="Yurish zaxirasi, km" placeholder="605" />
             <Field name="motorPowerKw" label="Motor quvvati, kW" placeholder="160" />
             <label className="grid gap-1 text-sm font-semibold">
-              Privod
+              Tortish turi (privod)
               <select name="driveType" className="form-control">
                 <option value="UNKNOWN">Kiritilmagan</option>
                 <option value="FWD">FWD</option>
@@ -67,12 +67,12 @@ export default function NewListingPage() {
             <SectionTitle icon={<Phone className="h-5 w-5" />} title="Kontakt" />
             <div className="mt-4 grid gap-3">
               <Field name="region" label="Hudud" placeholder="Toshkent" />
-              <Field name="exactLocation" label="Aniq lokatsiya" placeholder="Sergeli avtomobil bozori" />
-              <Field name="latitude" label="Latitude" placeholder="41.2995" />
-              <Field name="longitude" label="Longitude" placeholder="69.2401" />
-              <Field name="yandexMapUrl" label="Yandex Maps URL" placeholder="https://yandex.com/maps/..." />
+              <Field name="exactLocation" label="Aniq manzil" placeholder="Sergeli avtomobil bozori" />
+              <Field name="latitude" label="Kenglik" placeholder="41.2995" />
+              <Field name="longitude" label="Uzunlik" placeholder="69.2401" />
+              <Field name="yandexMapUrl" label="Yandex Maps havolasi" placeholder="https://yandex.com/maps/..." />
               <Field name="sellerPhone" label="Telefon" placeholder="+998901234567" />
-              <Field name="sellerTelegramUsername" label="Telegram username" placeholder="avto_seller" />
+              <Field name="sellerTelegramUsername" label="Telegram username" placeholder="avto_sotuvchi" />
             </div>
           </section>
 

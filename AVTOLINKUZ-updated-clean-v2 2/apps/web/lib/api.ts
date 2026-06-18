@@ -36,6 +36,31 @@ export interface CreateSellerListingInput {
   photoUrls: string[];
 }
 
+export interface BuyerSession {
+  userId: string;
+  accessToken?: string;
+}
+
+export interface ChatSession {
+  chatId: string;
+}
+
+export interface MiniChatMessage {
+  id: string;
+  listingId: string;
+  sender: "buyer" | "seller";
+  body: string;
+  createdAt: string;
+}
+
+interface ApiChatMessage {
+  id: string;
+  chatId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+}
+
 export async function getListings(filters?: ListingFilters): Promise<Listing[]> {
   if (!API_URL) {
     return filterLocalListings(filters);
@@ -80,6 +105,44 @@ export async function getPrivateListing(id: string, userId: string): Promise<Lis
   return res.json();
 }
 
+export async function requestPhoneOtp(phone: string, name?: string) {
+  if (!API_URL) {
+    return {
+      phone,
+      expiresInSeconds: 300,
+      message: "Sinov rejimi: tasdiqlash kodi 111111"
+    };
+  }
+
+  const res = await fetch(`${API_URL}/auth/phone/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, name }),
+    cache: "no-store"
+  });
+  if (!res.ok) throw new Error("OTP request failed");
+  return res.json();
+}
+
+export async function verifyPhoneOtp(phone: string, code: string, name?: string): Promise<BuyerSession> {
+  if (!API_URL) {
+    if (code !== "111111") throw new Error("Invalid demo OTP");
+    return {
+      userId: `demo-buyer-${phone.replace(/\D/g, "") || "user"}`,
+      accessToken: "demo-token"
+    };
+  }
+
+  const res = await fetch(`${API_URL}/auth/phone/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, code, name }),
+    cache: "no-store"
+  });
+  if (!res.ok) throw new Error("OTP verification failed");
+  return res.json();
+}
+
 export async function createSellerListing(input: CreateSellerListingInput): Promise<ListingPrivate> {
   if (!API_URL) {
     return {
@@ -91,7 +154,7 @@ export async function createSellerListing(input: CreateSellerListingInput): Prom
       status: "ACTIVE",
       seller: {
         id: input.sellerId ?? "demo-seller",
-        name: input.sellerName ?? "Seller",
+        name: input.sellerName ?? "Sotuvchi",
         phone: input.sellerPhone,
         telegramId: input.telegramId,
         telegramUsername: input.sellerTelegramUsername,
@@ -110,7 +173,7 @@ export async function createSellerListing(input: CreateSellerListingInput): Prom
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         telegramId: input.telegramId,
-        name: input.sellerName ?? "Seller",
+        name: input.sellerName ?? "Sotuvchi",
         username: input.sellerTelegramUsername
       }),
       cache: "no-store"
@@ -134,6 +197,111 @@ export async function createSellerListing(input: CreateSellerListingInput): Prom
   });
   if (!res.ok) throw new Error("Listing could not be created");
   return res.json();
+}
+
+export async function updateSellerListing(id: string, input: CreateSellerListingInput): Promise<ListingPrivate> {
+  if (!API_URL) {
+    return {
+      ...input,
+      id,
+      title: input.title || `${input.make} ${input.model} ${input.year}`,
+      rangeStandard: input.rangeStandard ?? "UNKNOWN",
+      driveType: input.driveType ?? "UNKNOWN",
+      status: "ACTIVE",
+      seller: {
+        id: input.sellerId ?? "demo-seller",
+        name: input.sellerName ?? "Sotuvchi",
+        phone: input.sellerPhone,
+        telegramId: input.telegramId,
+        telegramUsername: input.sellerTelegramUsername,
+        region: input.region as ListingPrivate["region"],
+        createdAt: new Date().toISOString()
+      },
+      region: input.region as ListingPrivate["region"],
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  const { telegramId, sellerName, ...listingInput } = input;
+  void telegramId;
+  void sellerName;
+
+  const res = await fetch(`${API_URL}/listings/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(listingInput),
+    cache: "no-store"
+  });
+  if (!res.ok) throw new Error("Listing could not be updated");
+  return res.json();
+}
+
+export async function updateListingStatus(id: string, status: "ACTIVE" | "SOLD" | "ARCHIVED"): Promise<ListingPrivate | null> {
+  if (!API_URL) return null;
+
+  const res = await fetch(`${API_URL}/listings/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+    cache: "no-store"
+  });
+  if (!res.ok) throw new Error("Listing status could not be updated");
+  return res.json();
+}
+
+export async function startChat(input: { listingId: string; buyerId: string; sellerId: string }): Promise<ChatSession> {
+  if (!API_URL) return { chatId: `demo-${input.listingId}-${input.buyerId}` };
+
+  const res = await fetch(`${API_URL}/chat/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    cache: "no-store"
+  });
+  if (!res.ok) throw new Error("Chat could not be started");
+  const chat = await res.json() as { id: string };
+  return { chatId: chat.id };
+}
+
+export async function getChatMessages(input: { chatId: string; listingId: string; buyerId: string }): Promise<MiniChatMessage[]> {
+  if (!API_URL || input.chatId.startsWith("demo-")) return [];
+
+  const res = await fetch(`${API_URL}/chat/${input.chatId}/messages`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Chat messages could not be loaded");
+  const messages = await res.json() as ApiChatMessage[];
+  return messages.map((message) => mapChatMessage(message, input.listingId, input.buyerId));
+}
+
+export async function sendChatMessage(input: { chatId: string; listingId: string; senderId: string; buyerId: string; body: string }): Promise<MiniChatMessage> {
+  if (!API_URL || input.chatId.startsWith("demo-")) {
+    return {
+      id: `buyer-${Date.now()}`,
+      listingId: input.listingId,
+      sender: "buyer",
+      body: input.body,
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  const res = await fetch(`${API_URL}/chat/${input.chatId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ senderId: input.senderId, body: input.body }),
+    cache: "no-store"
+  });
+  if (!res.ok) throw new Error("Chat message could not be sent");
+  const message = await res.json() as ApiChatMessage;
+  return mapChatMessage(message, input.listingId, input.buyerId);
+}
+
+function mapChatMessage(message: ApiChatMessage, listingId: string, buyerId: string): MiniChatMessage {
+  return {
+    id: message.id,
+    listingId,
+    sender: message.senderId === buyerId ? "buyer" : "seller",
+    body: message.body,
+    createdAt: message.createdAt
+  };
 }
 
 export async function aiSearch(query: string): Promise<AiSearchResult[]> {
@@ -195,38 +363,57 @@ function filterLocalListings(filters?: ListingFilters): Listing[] {
 
 function localAiFilters(query: string): ListingFilters {
   const lower = normalizeSearchText(query);
-  const make = ["BYD", "Li Auto", "Zeekr", "Nio", "Xpeng"].find((item) => lower.includes(item.toLowerCase()));
-  const model = ["Song Plus", "Song", "Seal", "Han", "Tang", "L7", "L8", "L9", "001", "007"].find((item) => lower.includes(item.toLowerCase()));
-  const region = ["Toshkent", "Samarqand", "Buxoro", "Fargona", "Andijon", "Namangan"].find((item) => lower.includes(item.toLowerCase()));
-  const budget = lower.match(/(?:\$?\s*)?(\d{1,3})\s*(ming|k|минг|tys|тыс)\b|(?:\$?\s*)(\d{4,6})\s*(?:dollar|usd|\$)?/);
+  const make = ["BYD", "Li Auto", "Zeekr", "Nio", "Xpeng", "Avatr", "Aito", "Denza", "Voyah"].find((item) => lower.includes(item.toLowerCase()));
+  const model = ["Song Plus", "Song", "Seal", "Han", "Tang", "Dolphin", "L7", "L8", "L9", "001", "007", "P7", "G6", "ET5", "ES6"].find((item) => lower.includes(item.toLowerCase()));
+  const region = ["Toshkent", "Samarqand", "Buxoro", "Fargona", "Andijon", "Namangan", "Navoiy", "Jizzax", "Xorazm"].find((item) => lower.includes(item.toLowerCase()));
+  const budget = lower.match(/(?:\$?\s*)?(\d{1,3})\s*(ming|k|минг|тыс|tys)\b|(?:\$?\s*)(\d{4,6})\s*(?:dollar|usd|\$)?/);
   const powertrainType = lower.includes("reev")
-    ? "REEV"
-    : lower.includes("phev")
-      ? "PHEV"
-      : lower.includes("hybrid") || lower.includes("gibrid")
-        ? "HYBRID"
-        : lower.includes("faqat ev") || lower.includes("toza ev") || lower.includes("pure ev")
-          ? "EV"
+    ? "REEV" as const
+    : lower.includes("phev") || lower.includes("plug in") || lower.includes("plugin")
+      ? "PHEV" as const
+      : lower.includes("hybrid") || lower.includes("gibrid") || lower.includes("гибрид")
+        ? "HYBRID" as const
+        : lower.includes("faqat ev") || lower.includes("toza ev") || lower.includes("pure ev") || lower.includes("bev")
+          ? "EV" as const
           : undefined;
-  const range = lower.match(/(\d{3,4})\s*(km)?\s*(range|zapas|zapasi|yurish|ход)/);
-  const mileage = lower.match(/(\d{1,3})\s*(ming|k|минг|tys|тыс)?\s*(km|км)?\s*(probeg|yurgan|mileage|пробег)/);
-  const battery = lower.match(/(\d{2,3})\s*%/);
+  const driveType = lower.includes("awd") || lower.includes("4x4") || lower.includes("4wd") || lower.includes("toliq privod") || lower.includes("to'liq privod") || lower.includes("полный привод")
+    ? "AWD" as const
+    : lower.includes("rwd") || lower.includes("orqa privod") || lower.includes("задний привод")
+      ? "RWD" as const
+      : lower.includes("fwd") || lower.includes("old privod") || lower.includes("передний привод")
+        ? "FWD" as const
+        : undefined;
+  const range = lower.match(/(?:yurish|zapas|zapasi|range|ход)\s*(\d{3,4})|(\d{3,4})\s*(?:km|км|\+)?\s*(?:dan yuqori|dan kop|dan ko'p|yuqori|yurish|zapas|zapasi|range|ход)/);
+  const mileage = lower.match(/(?:probeg|yurishi|mileage|пробег)\s*(\d{1,6})\s*(ming|k|минг|тыс|tys)?|(\d{1,6})\s*(ming|k|минг|тыс|tys)?\s*(?:km|км)?\s*(?:gacha|dan kam|probeg|yurgan|mileage|пробег)/);
+  const battery = lower.match(/(?:batareya|battery|аккум)[^\d]*(\d{2,3})\s*%|(\d{2,3})\s*%\s*(?:batareya|battery|аккум)/);
   const rawBudgetValue = Number(budget?.[1] ?? budget?.[3]);
   const maxPrice = budget
     ? rawBudgetValue < 1000
       ? rawBudgetValue * 1000
       : rawBudgetValue
     : undefined;
-  const mileageValue = mileage ? Number(mileage[1]) : undefined;
-  const shouldScaleMileage = Boolean(mileage?.[2]) || Boolean(mileageValue && mileageValue < 1000);
+  const mileageValue = mileage ? Number(mileage[1] ?? mileage[3]) : undefined;
+  const shouldScaleMileage = Boolean(mileage?.[2] ?? mileage?.[4]) || Boolean(mileageValue && mileageValue < 1000);
   const mileageMultiplier = shouldScaleMileage ? 1000 : 1;
   const maxMileageKm = mileageValue
     ? mileageValue * mileageMultiplier
       : lower.includes("yurishi kam") || lower.includes("kam yurgan")
         ? 50000
+        : lower.includes("deyarli yangi") || lower.includes("почти новый")
+          ? 20000
         : undefined;
   const year = lower.match(/\b(20[1-2]\d)\b/);
   const wantsNewer = lower.includes("yangi") || lower.includes("svejiy") || lower.includes("свеж");
+  const minRangeKm = range
+    ? Number(range[1] ?? range[2])
+    : lower.includes("uzoq") || lower.includes("long range") || lower.includes("дальний")
+      ? 500
+      : undefined;
+  const minBatteryHealthPercent = battery
+    ? Number(battery[1] ?? battery[2])
+    : lower.includes("batareyasi yaxshi") || lower.includes("аккумулятор хороший")
+      ? 90
+      : undefined;
 
   return {
     q: make || model ? undefined : query,
@@ -234,11 +421,13 @@ function localAiFilters(query: string): ListingFilters {
     model,
     region,
     powertrainType,
+    driveType,
     maxPrice,
     minYear: year ? Number(year[1]) : wantsNewer ? new Date().getFullYear() - 4 : undefined,
     maxMileageKm,
-    minRangeKm: range ? Number(range[1]) : lower.includes("uzoq") || lower.includes("range") ? 500 : undefined,
-    minBatteryHealthPercent: battery ? Number(battery[1]) : lower.includes("batareyasi yaxshi") ? 90 : undefined
+    minRangeKm,
+    minBatteryHealthPercent,
+    customsStatus: lower.includes("bojxona") || lower.includes("rastamojka") || lower.includes("rasmiylashtirilgan") || lower.includes("растамож") ? "rasmiy" : undefined
   };
 }
 
@@ -267,7 +456,8 @@ function localAiSearch(query: string): AiSearchResult[] {
         confidenceLabel: scored.score >= 78 ? "high" as const : scored.score >= 58 ? "medium" as const : "low" as const,
         matchedFilters: filters,
         explanationUz: `Nega mos: ${scored.reasons.join(", ") || "so'rovga umumiy jihatdan yaqin"}. Moslik: ${scored.score}%.${scored.warnings.length ? ` Eslatma: ${scored.warnings.join(", ")}.` : ""}`,
-        nextActionUz: scored.score >= 78 ? "Kontakt va lokatsiyani ko'rish uchun telefon raqam bilan kiring." : "Aniqroq natija uchun byudjet, probeg yoki range kiriting."
+        priceInsightUz: localPriceInsight(listing),
+        nextActionUz: scored.score >= 78 ? "Kontakt va aniq manzilni ko'rish uchun telefon raqam bilan kiring." : "Aniqroq natija uchun byudjet, probeg yoki yurish zaxirasini kiriting."
       };
     })
     .filter((result) => result.score >= 28)
@@ -321,6 +511,16 @@ function localScoreListing(listing: ListingPrivate, filters: ListingFilters, raw
     }
   }
 
+  if (filters.driveType) {
+    if (listing.driveType === filters.driveType) {
+      score += 8;
+      reasons.push(`${listing.driveType} privod mos`);
+    } else if (listing.driveType && listing.driveType !== "UNKNOWN") {
+      score -= 6;
+      warnings.push(`privod ${listing.driveType}`);
+    }
+  }
+
   if (filters.maxPrice) {
     const ratio = listing.priceUsd / filters.maxPrice;
     if (ratio <= 1) {
@@ -358,10 +558,10 @@ function localScoreListing(listing: ListingPrivate, filters: ListingFilters, raw
   if (filters.minRangeKm) {
     if ((listing.rangeKm ?? 0) >= filters.minRangeKm) {
       score += 12;
-      reasons.push("range mos");
+      reasons.push("yurish zaxirasi mos");
     } else {
       score -= 10;
-      warnings.push("range pastroq");
+      warnings.push("yurish zaxirasi pastroq");
     }
   }
 
@@ -371,31 +571,64 @@ function localScoreListing(listing: ListingPrivate, filters: ListingFilters, raw
       reasons.push("batareya holati yaxshi");
     } else {
       score -= 8;
+      warnings.push("batareya foizi past yoki kiritilmagan");
+    }
+  } else if ((listing.batteryHealthPercent ?? 0) >= 90) {
+    score += 4;
+  }
+
+  if (filters.customsStatus) {
+    if (listing.customsStatus && normalizeSearchText(listing.customsStatus).includes("rasmiy")) {
+      score += 7;
+      reasons.push("bojxona holati mos");
+    } else {
+      warnings.push("bojxona holati aniq emas");
     }
   }
 
-  if (lower.includes("oilaviy") || lower.includes("oila") || lower.includes("family")) {
-    if (haystack.includes("oilaviy") || haystack.includes("suv") || haystack.includes("krossover") || haystack.includes("5 orin")) {
+  if (lower.includes("oilaviy") || lower.includes("oila") || lower.includes("family") || lower.includes("семей")) {
+    if (/(oilaviy|suv|krossover|5 o'rin|5 orin|7 joy|l7|l8|l9|tang|song plus)/.test(haystack)) {
       score += 10;
       reasons.push("oilaviy foydalanishga mos");
+    } else {
+      warnings.push("oilaviy qulaylik aniq emas");
     }
   }
 
-  if (lower.includes("shahar") || lower.includes("city")) {
+  if (lower.includes("shahar") || lower.includes("city") || lower.includes("город")) {
     if (listing.priceUsd <= 32000 || listing.powertrainType === "EV") {
       score += 7;
       reasons.push("shahar uchun qulay");
     }
   }
 
-  const tokens = lower.split(/\s+/).filter((token) => token.length > 2 && !["gacha", "uchun", "bilan", "kerak"].includes(token));
+  if (lower.includes("premium") || lower.includes("lyuks") || lower.includes("komfort") || lower.includes("max")) {
+    if (/(pro|max|lyuks|premium|we|komfort|flagship)/.test(haystack)) {
+      score += 8;
+      reasons.push("komplektatsiyasi yuqori");
+    }
+  }
+
+  const tokens = lower.split(/\s+/).filter((token) => token.length > 2 && !["gacha", "uchun", "bilan", "kerak", "menga", "toping", "mashina"].includes(token));
   score += Math.min(10, tokens.filter((token) => haystack.includes(token)).length * 2);
 
   return {
     score: Math.max(0, Math.min(100, Math.round(score))),
-    reasons,
-    warnings
+    reasons: [...new Set(reasons)].slice(0, 5),
+    warnings: [...new Set(warnings)].slice(0, 3)
   };
+}
+
+function localPriceInsight(listing: ListingPrivate) {
+  const similar = featuredListings.filter((item) => item.id !== listing.id && (item.make === listing.make || item.powertrainType === listing.powertrainType));
+  const average = similar.length
+    ? Math.round(similar.reduce((sum, item) => sum + item.priceUsd, 0) / similar.length)
+    : listing.priceUsd;
+  const diffPercent = average ? Math.round(((listing.priceUsd - average) / average) * 100) : 0;
+
+  if (diffPercent <= -8) return `Narx tahlili: o'xshash e'lonlardan taxminan ${Math.abs(diffPercent)}% arzonroq.`;
+  if (diffPercent >= 10) return `Narx tahlili: o'xshash e'lonlardan taxminan ${diffPercent}% qimmatroq, savdolashish foydali.`;
+  return "Narx tahlili: o'xshash e'lonlarga yaqin, adolatli diapazonda.";
 }
 
 function normalizeSearchText(value: string) {

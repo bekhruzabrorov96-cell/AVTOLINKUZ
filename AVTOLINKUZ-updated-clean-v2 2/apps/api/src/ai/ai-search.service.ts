@@ -150,6 +150,7 @@ export class AiSearchService {
           confidenceLabel: this.confidenceLabel(scored.score),
           matchedFilters: this.toMatchedFilters(filters),
           explanationUz: this.explain(scored),
+          priceInsightUz: this.priceInsight(listing as AiListing, listings as AiListing[]),
           nextActionUz: this.nextAction(scored.score)
         };
       })
@@ -194,7 +195,7 @@ export class AiSearchService {
       premiumUse: this.includesAny(normalized, ["premium", "lyuks", "люкс", "komfort", "qulay", "max", "flagship"]),
       cityUse: this.includesAny(normalized, ["shahar", "город", "city", "kompakt", "kichik"]),
       cheapIntent: this.includesAny(normalized, ["arzon", "дешев", "cheap", "byudjet", "budget"]),
-      longRangeIntent: this.includesAny(normalized, ["uzoq", "range", "zapasi", "zapas", "дальн", "500+", "600+", "700+"]),
+      longRangeIntent: this.includesAny(normalized, ["uzoq", "uzoq yuradigan", "range", "zapasi", "zapas", "дальн", "дальний", "500+", "600+", "700+"]),
       lowMileageIntent: this.includesAny(normalized, ["yurishi kam", "kam yurgan", "probeg kam", "малый пробег", "low mileage"]),
       importedIntent: this.includesAny(normalized, ["xitoydan", "import", "olib kelingan", "привез", "из китая"]),
       tokens
@@ -207,7 +208,7 @@ export class AiSearchService {
       filters.maxPrice ? undefined : "30 ming dollargacha",
       filters.powertrainType ? undefined : "REEV yoki toza EV",
       filters.maxMileageKm ? undefined : "50 ming km gacha",
-      filters.minRangeKm ? undefined : "500 km dan yuqori",
+      filters.minRangeKm ? undefined : "500 km dan yuqori yurish zaxirasi",
       filters.region ? undefined : "Toshkent",
       filters.minBatteryHealthPercent ? undefined : "batareya 90% dan yuqori"
     ].filter((item): item is string => Boolean(item));
@@ -389,14 +390,14 @@ export class AiSearchService {
     if (filters.minRangeKm) {
       if ((listing.rangeKm ?? 0) >= filters.minRangeKm) {
         score += 12;
-        reasons.push("yurish masofasi mos");
+        reasons.push("yurish zaxirasi mos");
       } else {
         score -= 12;
-        warnings.push("range so'rovdan past");
+        warnings.push("yurish zaxirasi so'rovdan past");
       }
     } else if (filters.longRangeIntent && (listing.rangeKm ?? 0) >= 500) {
       score += 8;
-      reasons.push("range yaxshi");
+      reasons.push("yurish zaxirasi yaxshi");
     }
 
     if (filters.minBatteryHealthPercent) {
@@ -459,9 +460,20 @@ export class AiSearchService {
   }
 
   private nextAction(score: number) {
-    if (score >= 78) return "Kontakt va lokatsiyani ko'rish uchun telefon raqam bilan kiring.";
-    if (score >= 58) return "Mos keladi, lekin narx/probeg/range tafsilotlarini tekshiring.";
-    return "Bu yaqin variant. Aniqroq natija uchun byudjet, probeg yoki range kiriting.";
+    if (score >= 78) return "Kontakt va aniq manzilni ko'rish uchun telefon raqam bilan kiring.";
+    if (score >= 58) return "Mos keladi, lekin narx, probeg va yurish zaxirasini tekshiring.";
+    return "Bu yaqin variant. Aniqroq natija uchun byudjet, probeg yoki yurish zaxirasini kiriting.";
+  }
+
+  private priceInsight(listing: AiListing, allListings: AiListing[]) {
+    const similar = allListings.filter((item) => item.id !== listing.id && (this.same(item.make, listing.make) || item.powertrainType === listing.powertrainType));
+    if (!similar.length) return "Narx tahlili: solishtirish uchun o'xshash e'lonlar hali kam.";
+
+    const average = Math.round(similar.reduce((sum, item) => sum + item.priceUsd, 0) / similar.length);
+    const diffPercent = average ? Math.round(((listing.priceUsd - average) / average) * 100) : 0;
+    if (diffPercent <= -8) return `Narx tahlili: o'xshash e'lonlardan taxminan ${Math.abs(diffPercent)}% arzonroq.`;
+    if (diffPercent >= 10) return `Narx tahlili: o'xshash e'lonlardan taxminan ${diffPercent}% qimmatroq, savdolashish foydali.`;
+    return "Narx tahlili: o'xshash e'lonlarga yaqin, adolatli diapazonda.";
   }
 
   private extractMake(query: string) {
@@ -477,8 +489,8 @@ export class AiSearchService {
   }
 
   private extractPowertrain(query: string): PowertrainType | undefined {
-    if (this.includesAny(query, ["reev", "range extender", "benzinda zaryad", "benzin generator"])) return "REEV";
-    if (this.includesAny(query, ["phev", "plug in", "plugin"])) return "PHEV";
+    if (this.includesAny(query, ["reev", "range extender", "benzinda zaryad", "benzin generator", "benzin bilan zaryad"])) return "REEV";
+    if (this.includesAny(query, ["phev", "plug in", "plugin", "plug-in"])) return "PHEV";
     if (this.includesAny(query, ["hybrid", "gibrid", "гибрид"])) return "HYBRID";
     if (this.includesAny(query, ["faqat ev", "toza ev", "pure ev", "100% ev", "bev"])) return "EV";
     return undefined;
@@ -493,8 +505,8 @@ export class AiSearchService {
 
   private extractMaxPrice(query: string) {
     const patterns: Array<{ regex: RegExp; needsPriceWord?: boolean }> = [
-      { regex: /(\d{1,3})\s*(ming|минг|тыс|tys|k)\s*(dollar|dollargacha|usd|\$)?/i },
-      { regex: /(\d{4,6})\s*(dollar|dollargacha|usd|\$)/i },
+      { regex: /(\d{1,3})\s*(ming|минг|тыс|tys|k)\s*(dollar|dollargacha|usd|\$)?\s*(?:gacha|dan kam|acha)?/i },
+      { regex: /(\d{4,6})\s*(dollar|dollargacha|usd|\$)\s*(?:gacha|dan kam|acha)?/i },
       { regex: /\$\s*(\d{4,6})/i },
       { regex: /(\d{4,6})/, needsPriceWord: true }
     ];
@@ -510,7 +522,7 @@ export class AiSearchService {
   }
 
   private extractMinPrice(query: string) {
-    const match = query.match(/(\d{1,3})\s*(ming|k)\s*(dan yuqori|dan qimmat|above|over)/i);
+    const match = query.match(/(\d{1,3})\s*(ming|k|минг|тыс)\s*(dan yuqori|dan qimmat|above|over)/i);
     if (!match) return undefined;
     return Number(match[1]) * 1000;
   }
@@ -540,9 +552,9 @@ export class AiSearchService {
 
   private extractMaxMileage(query: string) {
     const patterns = [
-      /(?:probeg|yurishi|mileage|пробег)\s*(\d{1,6})\s*(ming|минг|k)?\s*(km|км)?/i,
-      /(\d{1,6})\s*(ming|минг|k)?\s*(km|км)\s*(?:gacha|dan kam|kam)?/i,
-      /(\d{1,3})\s*(ming|минг|k)\s*(?:probeg|yurgan|mileage|пробег)/i
+      /(?:probeg|yurishi|mileage|пробег)\s*(\d{1,6})\s*(ming|минг|тыс|tys|k)?\s*(km|км)?/i,
+      /(\d{1,6})\s*(ming|минг|тыс|tys|k)?\s*(km|км)\s*(?:gacha|dan kam|kam)?/i,
+      /(\d{1,3})\s*(ming|минг|тыс|tys|k)\s*(?:probeg|yurgan|mileage|пробег)/i
     ];
     for (const pattern of patterns) {
       const explicit = query.match(pattern);
@@ -558,13 +570,13 @@ export class AiSearchService {
   private extractMinRange(query: string) {
     const explicit = query.match(/(\d{3,4})\s*(\+|km|км)?\s*(dan yuqori|dan kop|dan ko'p|yuqori|range|zapas|zapasi|yurish|ход)?/i);
     if (explicit && this.includesAny(query, ["range", "zapas", "zapasi", "yurish", "uzoq", "km dan yuqori", "km+", "ход"])) return Number(explicit[1]);
-    const reversed = query.match(/(range|zapas|zapasi|yurish|ход)\s*(\d{3,4})/i);
+    const reversed = query.match(/(range|zapas|zapasi|yurish|yuradigan|ход)\s*(\d{3,4})/i);
     if (reversed) return Number(reversed[2]);
     const oldExplicit = query.match(/(\d{3,4})\s*(km|км)?\s*(range|zapas|zapasi|yurish|ход)/i);
     if (oldExplicit) return Number(oldExplicit[1]);
     const plus = query.match(/(\d{3,4})\s*\+/);
     if (plus && this.includesAny(query, ["range", "zapas", "uzoq"])) return Number(plus[1]);
-    if (this.includesAny(query, ["uzoq yo'l", "uzoq yuradigan", "long range", "дальний ход"])) return 500;
+    if (this.includesAny(query, ["uzoq yo'l", "uzoq yuradigan", "long range", "дальний ход", "дальнобой"])) return 500;
     return undefined;
   }
 
