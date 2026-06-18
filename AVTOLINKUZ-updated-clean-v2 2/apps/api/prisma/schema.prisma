@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  ARCHIVED
+}
+
+enum PowertrainType {
+  EV
+  REEV
+  PHEV
+  HYBRID
+}
+
+enum DriveType {
+  FWD
+  RWD
+  AWD
+  UNKNOWN
+}
+
+enum RangeStandard {
+  CLTC
+  WLTP
+  EPA
+  UNKNOWN
+}
+
+model User {
+  id             String     @id @default(cuid())
+  phone          String?    @unique
+  telegramId     String?    @unique
+  telegramUsername String?
+  name           String
+  region         String?
+  listings       Listing[]
+  favorites      Favorite[]
+  aiSearches      AiSearchLog[]
+  sentMessages   Message[]  @relation("SentMessages")
+  createdChats   Chat[]     @relation("BuyerChats")
+  receivedChats  Chat[]     @relation("SellerChats")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model AiSearchLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  query        String
+  parsed       Json
+  resultCount  Int
+  topListingId String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Listing {
+  id          String        @id @default(cuid())
+  title       String
+  make        String
+  model       String
+  year        Int
+  powertrainType PowertrainType @default(EV)
+  trim        String?
+  batteryKwh  Float?
+  rangeKm     Int?
+  rangeStandard RangeStandard @default(UNKNOWN)
+  motorPowerKw Int?
+  driveType   DriveType @default(UNKNOWN)
+  condition   String?
+  batteryHealthPercent Int?
+  customsStatus String?
+  bodyColor   String?
+  vin         String?
+  priceUsd    Int
+  mileageKm   Int
+  region      String
+  exactLocation String?
+  latitude    Float?
+  longitude   Float?
+  yandexMapUrl String?
+  sellerPhone String?
+  sellerTelegramUsername String?
+  description String
+  photoUrls   String[]
+  status      ListingStatus @default(ACTIVE)
+  sellerId    String
+  seller      User          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  favorites   Favorite[]
+  chats       Chat[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([make])
+  @@index([region])
+  @@index([powertrainType])
+  @@index([year])
+  @@index([priceUsd])
+  @@index([rangeKm])
+}
+
+model Favorite {
+  userId    String
+  listingId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, listingId])
+}
+
+model Chat {
+  id        String    @id @default(cuid())
+  listingId String
+  buyerId   String
+  sellerId  String
+  listing   Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer     User      @relation("BuyerChats", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller    User      @relation("SellerChats", fields: [sellerId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  createdAt DateTime  @default(now())
+
+  @@unique([listingId, buyerId, sellerId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  chatId    String
+  senderId  String
+  body      String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}

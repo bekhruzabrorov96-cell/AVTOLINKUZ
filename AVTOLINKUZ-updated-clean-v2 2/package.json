@@ -1,0 +1,17 @@
+{
+  "name": "avtolink-uz",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @avtolink/web",
+    "dev:api": "npm run start:dev --workspace @avtolink/api",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "prisma:generate": "npm run prisma:generate --workspace @avtolink/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace @avtolink/api"
+  }
+}
