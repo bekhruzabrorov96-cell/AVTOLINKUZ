@@ -1,0 +1,11 @@
+{
+  "name": "@avtolink/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit src/index.ts --target ES2020 --module ESNext --moduleResolution bundler --strict"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}
